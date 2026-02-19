@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import eigh
 import argparse
 
-def build_2d_hamiltonian(N=20, potential='well'):
+def build_2d_hamiltonian(N=20, potential='well', boundary=None):
     """
     Build a discretized 2D Hamiltonian on an N x N grid.
 
@@ -47,15 +47,27 @@ def build_2d_hamiltonian(N=20, potential='well'):
             row = idx(i,j)
             # Potential
             H[row, row] = 4. * inv_dx2 + V(i,j)  # Kinetic ~ -4/dx^2 in 2D FD
-            # Neighbors (assuming no boundary conditions or Dirichlet)
-            if i > 0:    # up
+            # Neighbors (generalized boundary conditions)
+            if i > 0:
                 H[row, idx(i-1, j)] = inv_dx2
-            if i < N-1:  # down
+            else:
+                if boundary is not None:
+                    H[row, row] += inv_dx2 * boundary(i * dx, j * dx)
+            if i < N-1:
                 H[row, idx(i+1, j)] = inv_dx2
-            if j > 0:    # left
+            else:
+                if boundary is not None:
+                    H[row, row] += inv_dx2 * boundary(i * dx, j * dx)
+            if j > 0:
                 H[row, idx(i, j-1)] = inv_dx2
-            if j < N-1:  # right
+            else:
+                if boundary is not None:
+                    H[row, row] += inv_dx2 * boundary(i * dx, j * dx)
+            if j < N-1:
                 H[row, idx(i, j+1)] = inv_dx2
+            else:
+                if boundary is not None:
+                    H[row, row] += inv_dx2 * boundary(i * dx, j * dx)
 
     return H
 
@@ -100,6 +112,8 @@ if __name__ == '__main__':
                         help='Potential type')
     parser.add_argument('--n_eigs', type=int, default=5,
                         help='Number of eigenvalues to return (positive integer, <= N^2)')
+    parser.add_argument('--save_density', action='store_true',
+                        help='Save ground-state probability density to file')
     args = parser.parse_args()
 
     # Sanity checks
@@ -110,3 +124,9 @@ if __name__ == '__main__':
 
     vals, vecs = solve_eigen(N=args.N, potential=args.potential, n_eigs=args.n_eigs)
     print("Lowest", args.n_eigs, "eigenvalues:", vals)
+    np.savetxt(f'eigs_N{args.N}.txt', vals)
+    if args.save_density:
+        psi = vecs[:, 0].reshape(args.N, args.N)
+        density = np.abs(psi) ** 2
+        np.savetxt(f'density_N{args.N}.txt', density)
+        print(f"Saved density to density_N{args.N}.txt")
